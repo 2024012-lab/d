@@ -8,13 +8,13 @@
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 
     <style>
-        /* 모바일 전체 화면 및 바다 테마 스타일 */
+        /* 모바일 전체 화면 및 해양 테마 스타일 */
         body {
             font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
             margin: 0;
             padding: 0;
-            background: linear-gradient(135deg, #011627 0%, #0b2545 100%);
-            color: #f0f8ff;
+            background: linear-gradient(135deg, #051622 0%, #0b2c4d 100%);
+            color: #e2f1f8;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -29,7 +29,7 @@
             width: 100%;
             padding: 15px 0 5px 0;
             text-align: center;
-            background: linear-gradient(to bottom, rgba(1, 22, 39, 1), rgba(1, 22, 39, 0.8));
+            background: linear-gradient(to bottom, rgba(5, 22, 34, 1), rgba(5, 22, 34, 0.8));
             z-index: 10;
         }
 
@@ -37,17 +37,17 @@
             font-size: 1.4rem;
             margin: 0;
             color: #00f2fe;
-            text-shadow: 0 0 10px rgba(0, 242, 254, 0.8);
+            text-shadow: 0 0 10px rgba(0, 242, 254, 0.7);
         }
 
         p {
             font-size: 0.8rem;
-            color: #b0e0e6;
+            color: #a5c4d4;
             margin: 3px 0 0 0;
             letter-spacing: 0.5px;
         }
 
-        /* 상태 표시창: 바다 파도 느낌의 에메랄드 스타일 */
+        /* 상태 표시창: 바다빛 에메랄드 스타일 */
         #status {
             font-weight: bold;
             background: rgba(0, 242, 254, 0.15);
@@ -62,16 +62,16 @@
             transition: all 0.3s ease;
         }
 
-        /* 📱 모바일 카메라 컨테이너: 심해 잠수경 컨셉 보더 */
+        /* 📱 모바일 카메라 컨테이너: 심해 잠수경 컨셉 */
         #canvas-container {
             position: relative;
             width: 92%;
             max-width: 450px;
-            aspect-ratio: 3 / 4;
-            background: #020c1b;
+            aspect-ratio: 3 / 4; 
+            background: #020b14;
             border-radius: 20px;
             overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0, -1, 25, 0.7);
+            box-shadow: 0 20px 40px rgba(0, 10, 20, 0.6);
             border: 3px solid #00b4d8;
         }
 
@@ -90,7 +90,7 @@
 <body>
 
     <header>
-        <h1>🐬 Marine Smart Finder</h1>
+        <h1>🐬 Marine Finder</h1>
         <p>실시간 고래 & 돌고래 인공지능 탐지 시스템</p>
         <div id="status">⏳ 해양 추론 엔진 로드 중...</div>
     </header>
@@ -110,11 +110,8 @@ let session;
 const modelWidth = 416;
 const modelHeight = 416;
 
-// 🏷️ 요청하신 고래 및 돌고래 데이터셋 클래스 라벨 반영
-const labels = [
-    'Cuvier-s beaked whale - v5 2024-11-25 3-16am', 
-    'Pantropical spotted dolphin - v2 2024-11-25 10-40pm'
-];
+// 🏷️ 해양 생물 탐지 전용 클래스 라벨 설정
+const labels = ['Cuvier-s beaked whale - v5 2024-11-25 3-16am', 'Pantropical spotted dolphin - v2 2024-11-25 10-40pm'];
 
 async function startApp() {
     try {
@@ -129,11 +126,159 @@ async function startApp() {
         video.srcObject = stream;
         await video.play();
 
-        statusDiv.innerText = "⚡ 해양 AI 탐지 엔진 최적화 중...";
-        statusDiv.style.background = "rgba(72, 202, 228, 0.15)";
-        statusDiv.style.color = "#48cae4";
-        statusDiv.style.borderColor = "rgba(72, 202, 228, 0.4)";
+        statusDiv.innerText = "⚡ 소나 분석기 가동 준비 중...";
+        statusDiv.style.background = "rgba(0, 242, 254, 0.15)";
+        statusDiv.style.color = "#00f2fe";
+        statusDiv.style.borderColor = "rgba(0, 242, 254, 0.4)";
 
+        // Vercel/웹서버 환경에서 상대 경로로 ONNX 모델 로드
         session = await ort.InferenceSession.create('./best.onnx', { executionProviders: ['wasm'] });
 
-        statusDiv.innerText =
+        statusDiv.innerText = "🌊 바다 생물 실시간 추적 중";
+        statusDiv.style.background = "rgba(0, 180, 216, 0.2)";
+        statusDiv.style.color = "#00b4d8";
+        statusDiv.style.borderColor = "rgba(0, 180, 216, 0.5)";
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        requestAnimationFrame(processFrame);
+    } catch (err) {
+        statusDiv.innerText = "❌ 에러: 카메라 권한 부족 또는 best.onnx 없음";
+        statusDiv.style.background = "rgba(239, 68, 68, 0.2)";
+        statusDiv.style.color = "#ef4444";
+        console.error(err);
+    }
+}
+
+async function processFrame() {
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const inputTensor = preprocess(video, modelWidth, modelHeight);
+
+        if (inputTensor) {
+            try {
+                const outputs = await session.run({ images: inputTensor });
+                const output = outputs[Object.keys(outputs)[0]]; 
+                postprocess(output.data, output.dims);
+            } catch (e) {
+                console.error("추론 오류:", e);
+            }
+        }
+    }
+    requestAnimationFrame(processFrame);
+}
+
+function preprocess(img, width, height) {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    tempCtx.drawImage(img, 0, 0, width, height);
+
+    const imgData = tempCtx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+
+    const r = new Float32Array(width * height);
+    const g = new Float32Array(width * height);
+    const b = new Float32Array(width * height);
+
+    for (let i = 0; i < data.length / 4; i++) {
+        r[i] = data[i * 4] / 255.0;
+        g[i] = data[i * 4 + 1] / 255.0;
+        b[i] = data[i * 4 + 2] / 255.0;
+    }
+
+    const float32Data = new Float32Array(width * height * 3);
+    float32Data.set(r, 0);
+    float32Data.set(g, width * height);
+    float32Data.set(b, width * height * 2);
+
+    return new ort.Tensor('float32', float32Data, [1, 3, width, height]);
+}
+
+function postprocess(data, dims) {
+    const numAttributes = dims[1]; 
+    const numBoxes = dims[2];      
+
+    let candidates = [];
+
+    for (let i = 0; i < numBoxes; i++) {
+        let maxScore = 0;
+        let classId = -1;
+
+        for (let c = 4; c < numAttributes; c++) {
+            const score = data[c * numBoxes + i];
+            if (score > maxScore) {
+                maxScore = score;
+                classId = c - 4;
+            }
+        }
+
+        if (maxScore > 0.40) {
+            const cx = data[0 * numBoxes + i] / modelWidth * canvas.width;
+            const cy = data[1 * numBoxes + i] / modelHeight * canvas.height;
+            const w = data[2 * numBoxes + i] / modelWidth * canvas.width;
+            const h = data[3 * numBoxes + i] / modelHeight * canvas.height;
+
+            const x = cx - w / 2;
+            const y = cy - h / 2;
+
+            candidates.push({ x, y, w, h, score: maxScore, classId });
+        }
+    }
+
+    candidates.sort((a, b) => b.score - a.score);
+    let selectedObjects = [];
+
+    while (candidates.length > 0) {
+        let box = candidates.shift();
+        selectedObjects.push(box);
+
+        candidates = candidates.filter(item => {
+            if (item.classId !== box.classId) return true;
+
+            const interX1 = Math.max(box.x, item.x);
+            const interY1 = Math.max(box.y, item.y);
+            const interX2 = Math.min(box.x + box.w, item.x + item.w);
+            const interY2 = Math.min(box.y + box.h, item.y + item.h);
+
+            if (interX2 > interX1 && interY2 > interY1) {
+                const interArea = (interX2 - interX1) * (interY2 - interY1);
+                const boxArea = box.w * box.h;
+                const itemArea = item.w * item.h;
+                const iou = interArea / (boxArea + itemArea - interArea);
+                return iou < 0.5;
+            }
+            return true;
+        });
+    }
+
+    selectedObjects.forEach(obj => {
+        // 돌고래(1)는 네온 오렌지 코랄(#ff6b6b), 고래(0)는 시안 블루(#00f2fe)
+        const themeColor = obj.classId === 1 ? "#ff6b6b" : "#00f2fe";
+
+        ctx.strokeStyle = themeColor;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+
+        ctx.fillStyle = themeColor;
+        const labelName = labels[obj.classId];
+        const text = `${labelName} ${Math.round(obj.score * 100)}%`;
+
+        ctx.font = "bold 11px sans-serif";
+        const textWidth = ctx.measureText(text).width;
+
+        const labelY = obj.y - 20 < 0 ? 0 : obj.y - 20;
+        ctx.fillRect(obj.x - 1, labelY, textWidth + 10, 20);
+
+        ctx.fillStyle = "#051622"; // 텍스트 컬러는 배경색과 맞춰 가독성 극대화
+        ctx.fillText(text, obj.x + 5, labelY + 14);
+    });
+}
+
+window.onload = startApp;
+</script>
+</body>
+</html>
